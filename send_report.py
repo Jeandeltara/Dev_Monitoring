@@ -4,7 +4,8 @@ import glob
 import sys
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+from googleapiclient.http import MediaIoBaseUpload
+import io
 
 def upload_latest_report():
     print("Запуск модуля отправки на Google Диск...")
@@ -15,13 +16,13 @@ def upload_latest_report():
         print("❌ Ошибка: Файлы отчетов (*_report.txt) не найдены!")
         sys.exit(1)
         
-    # Сортируем файлы по имени (благодаря YYMMDD в начале, свежий всегда будет последним)
+    # Сортируем файлы по имени
     report_files.sort()
     latest_report = report_files[-1]
     file_name = os.path.basename(latest_report)
     print(f"📁 Найден свежий отчет для отправки: {file_name}")
 
-    # 2. Получаем секретный JSON-ключ из переменных окружения GitHub Actions
+    # 2. Получаем секретный JSON-ключ из переменных окружения
     secret_credentials = os.environ.get("GOOGLE_CREDENTIALS")
     if not secret_credentials:
         print("❌ Ошибка: Переменная окружения GOOGLE_CREDENTIALS не найдена!")
@@ -31,11 +32,11 @@ def upload_latest_report():
         # Превращаем строку с секретом обратно в JSON-словарь
         creds_dict = json.loads(secret_credentials)
         
-        # Область доступа (нам нужны полные права на работу с файлами Диска)
+        # Область доступа
         SCOPES = ['https://www.googleapis.com/auth/drive']
         creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         
-        # Строим клиент для работы с Google Drive API (версия v3)
+        # Строим клиент для работы с Google Drive API
         service = build('drive', 'v3', credentials=creds)
         
         # 3. Настройки файла и целевой папки
@@ -46,23 +47,26 @@ def upload_latest_report():
             'parents': [FOLDER_ID]
         }
         
-        # Подготавливаем файл к загрузке в текстовом формате
-        media = MediaFileUpload(latest_report, mimetype='text/plain', resumable=True)
+        # Читаем контент файла в память
+        with open(latest_report, 'rb') as f:
+            file_content = f.read()
+            
+        # Загружаем как поток байт БЕЗ resumable-режима (это обходит лимит квоты робота)
+        media = MediaIoBaseUpload(io.BytesIO(file_content), mimetype='text/plain', resumable=False)
         
-        print("🚀 Отправка файла в Google Drive...")
-        # Выполняем запрос на создание файла на Диске с поддержкой квоты папки-родителя
+        print("🚀 Отправка файла в Google Drive (прямой поток)...")
         drive_file = service.files().create(
             body=file_metadata,
             media_body=media,
             fields='id',
-            supportsAllDrives=True  # Использовать квоту папки владельца, а не робота
+            supportsAllDrives=True
         ).execute()
         
         print(f"✅ Успех! Файл успешно загружен на Google Диск. ID файла: {drive_file.get('id')}")
 
     except Exception as e:
         print(f"❌ Произошла ошибка во время отправки: {e}")
-        sys.exit(1)  # Заставляем GitHub Actions показать красную шайбу при ошибке
+        sys.exit(1)
 
 if __name__ == "__main__":
     upload_latest_report()
