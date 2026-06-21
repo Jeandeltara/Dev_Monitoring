@@ -29,9 +29,8 @@ jobs:
       run: python main.py
 
     - name: Upload Report to Google Drive
-      uses: adityassarkar/google-drive-upload-gitaction@main
+      uses: jakejarvis/google-drive-upload-action@master
       with:
-        credentials: ${{ secrets.GOOGLE_CREDENTIALS }} # Ваш текущий JSON-ключ робота
-        filename: "*.txt"                             # Какой файл брать (наш отчет)
-        folderId: "1HLX_PykEsDvuOpp7gGnEoTaTYN49T050" # ID вашей папки
-        overwrite: "true"
+        credentials: ${{ secrets.GOOGLE_CREDENTIALS }} # Ваш JSON-ключ робота
+        filename: "*_report.txt"                        # Ищем наш созданный текстовый файл
+        folder_id: "1HLX_PykEsDvuOpp7gGnEoTaTYN49T050" # ID вашей папки
