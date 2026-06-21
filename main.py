@@ -29,41 +29,43 @@ def upload_to_google_drive(file_name, folder_id):
         )
         service = build("drive", "v3", credentials=credentials)
 
-        # 1. Загружаем файл
         file_metadata = {
             "name": file_name,
             "parents": [folder_id]
         }
         media = MediaFileUpload(file_name, mimetype="text/plain", resumable=True)
 
+        # Запрашиваем ID и прямую ссылку на веб-интерфейс файла
         uploaded_file = service.files().create(
             body=file_metadata,
             media_body=media,
-            fields="id",
+            fields="id, webViewLink",
             supportsAllDrives=True
         ).execute()
 
         file_id = uploaded_file.get("id")
-        print(f"Файл загружен на Диск. ID: {file_id}")
+        file_link = uploaded_file.get("webViewLink")
+        print(f"Файл создан на стороне Google. ID: {file_id}")
 
-        # 2. Магия: Передаем права владения на ВАШ личный email.
-        # Замените 'ВАШ_EMAIL@gmail.com' на вашу реальную почту Google Диска!
+        # Укажите ваш точный личный Gmail
         user_email = "ivannosalevych@gmail.com" 
         
         permission_metadata = {
             "type": "user",
-            "role": "writer",  # Сначала даем права на запись
+            "role": "writer",
             "emailAddress": user_email
         }
         
-        # Делимся файлом с вашим основным аккаунтом
+        print(f"Пробуем открыть доступ для {user_email}...")
         service.permissions().create(
             fileId=file_id,
             body=permission_metadata,
             supportsAllDrives=True
         ).execute()
+        print("Доступ успешно предоставлен!")
         
-        print(f"Права на файл успешно предоставлены для {user_email}. Теперь он появится в вашей папке!")
+        # Выводим жирную ссылку в логи, которую можно просто скопировать
+        print(f"\n👉 ССЫЛКА НА ФАЙЛ: {file_link}\n")
 
     except Exception as e:
         print(f"Ошибка при работе с Google Диском: {e}")
