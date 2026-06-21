@@ -289,14 +289,20 @@ def parse_suspilne_site():
 
 TARGET_NEWS_LIST = []
 
-# --- ОКОНЧАТЕЛЬНЫЙ БЛОК ЗАПУСКА (Полный конвейер: RSS + Район + Радіо ТРЕК + Суспільне) ---
+# --- БЛОК ЗАПУСКА (Полный конвейер: RSS + Район + Радіо ТРЕК + Суспільне) ---
 if __name__ == "__main__":
-    from datetime import datetime, timedelta
-    today = datetime.now().date()
+    GOOGLE_FOLDER_ID = "1HLX_PykEsDvuOpp7gGnEoTaTYN49T050"
+    
+    # 1. Настройка даты и имени файла
+    kyiv_zone = ZoneInfo("Europe/Kyiv")
+    now = datetime.now(kyiv_zone)
+    file_name = f"{now.strftime('%y%m%d_%H%M')}_report.txt"
+    today = now.date()
+    
+    print("Запуск парсера новостей...")
     print(f"Ищем новости за СЕГОДНЯ: {today}\n")
 
-    # 1. Стандартные RSS-ленты
-        # 1. Стандартные RSS-ленты
+    # 2. Стандартные RSS-ленты
     rss_urls = [
         "https://rivnepost.rv.ua/rss", 
         "https://ogo.ua/feed",
@@ -304,6 +310,7 @@ if __name__ == "__main__":
         "https://charivne.info/rss",
         "https://7dniv.rv.ua/feed/",
         "https://rivne.media/rss",
+        "https://rivne.media/rss",  
         "https://rivne1.tv/rss",
         "https://itvmg.com/rss",
         "https://teza.tv/rss",
@@ -317,7 +324,7 @@ if __name__ == "__main__":
         print(f"Сканируем RSS ленту: {url}...")
         all_links.extend(parse_rss_feed(url, today))
         
-    # 2. Сканируем сайты сети «Район» (без RSS, первая новость с двух страниц)
+    # 3. Сканируем сайты сети «Район»
     print("\n--- ШАГ 2: Сканирование сети «Район» (Сайты без RSS) ---")
     rayon_sites = [
         "https://rivne.rayon.in.ua",
@@ -327,33 +334,38 @@ if __name__ == "__main__":
         print(f"Парсим сайт: {site}...")
         all_links.extend(parse_rayon_site(site, today))
 
-    # 3. Сканируем Радіо ТРЕК (Математический срез по длине строки разделителя дня)
+    # 4. Сканируем Радіо ТРЕК
     print("\n--- ШАГ 3: Сканирование Радіо ТРЕК (Сайт без RSS) ---")
     print("Парсим ленту Радіо ТРЕК...")
     all_links.extend(parse_radiotrek_site())
 
-    # 4. Сканируем Суспільне (Умная пагинация с автоматической остановкой на вчерашнем дне)
+    # 5. Сканируем Суспільне
     print("\n--- ШАГ 4: Сканирование Суспільне Рівне (Сайт без RSS) ---")
     print("Парсим ленту Суспільного...")
     all_links.extend(parse_suspilne_site())
 
-    # Убираем дубликаты со всех источников вместе
+    # Убираем дубликаты
     all_links = list(set(all_links))
     print(f"\nВсего собрано уникальных ссылок из всех источников: {len(all_links)}")
 
-    # 5. Фильтруем собранные ссылки по ключевому слову
-    keyword = r"23.{0,4} інженерно"  #Рабочее ключевое слово
+    # 6. Фильтруем собранные ссылки
+    keyword = r"23.{0,4} інженерно"  
     TARGET_NEWS_LIST = filter_pages_by_keyword(all_links, keyword)
 
-    # 6. Запись отчета в файл report.txt
-    script_dir = os.getcwd()
-    report_path = os.path.join(script_dir, "report.txt")
+    # 7. Формируем текст отчета
+    final_text = f"ОТЧЕТ: Найденные ссылки за {today} по ключевому слову '{keyword}'\n"
+    final_text += "=" * 60 + "\n"
+    for item in TARGET_NEWS_LIST:
+        final_text += f"- {item['title']}\n  {item['url']}\n\n"
 
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write(f"ОТЧЕТ: Найденные ссылки за {today} по ключевому слову '{keyword}'\n")
-        f.write("=" * 60 + "\n")
-        for item in TARGET_NEWS_LIST:
-            f.write(f"- {item['title']}\n  {item['url']}\n\n")
+    # 8. Запись локального файла с правильным динамическим именем
+    with open(file_name, "w", encoding="utf-8") as file:
+        file.write(final_text)
+        
+    print(f"Локальный файл {file_name} успешно создан.")
+    
+    # 9. Отправка готового файла на Google Диск
+    upload_to_google_drive(file_name, GOOGLE_FOLDER_ID)
             
     print("\n" + "=" * 40)
     print(f"ФИЛЬТРАЦИЯ ЗАВЕРШЕНА. Отобрано статей: {len(TARGET_NEWS_LIST)}")
