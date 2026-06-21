@@ -1,17 +1,16 @@
-name: Daily News Parser Only
+name: Automated News Monitoring System
 
 on:
-  # Автоматический запуск каждый день в 23:30 по Киеву (20:30 UTC)
   schedule:
-    - cron: '30 20 * * *'
-  # Кнопка для ручного запуска в интерфейсе GitHub
-  workflow_dispatch:
+    - cron: '30 20 * * *'  # Каждый день в 20:30 UTC (23:30 по Киеву) — ТОЛЬКО СБОР
+    - cron: '00 02 * * *'  # Каждый день в 02:00 UTC (05:00 по Киеву) — ОТПРАВКА И ОЧИСТКА
+  workflow_dispatch:       # Кнопка ручного запуска (запустит всё по очереди для теста)
 
 permissions:
-  contents: write          # Разрешение Гитхабу сохранять файлы в ваш репозиторий
+  contents: write          # Даем права Гитхабу сохранять и удалять файлы в репозитории
 
 jobs:
-  run-parser:
+  monitor-job:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,19 +24,37 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Устанавливаем библиотеки
+    - name: Устанавливаем базовые библиотеки
       run: |
         python -m pip install --upgrade pip
         pip install requests beautifulsoup4 python-dateutil lxml
 
-    - name: Запускаем парсер новостей
+    # --- БЛОК СБОРА НОВОСТЕЙ (В 23:30 по Киеву или при ручном запуске) ---
+    - name: Сбор новостей (Парсер)
+      if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 20 * * *'
       run: python main.py
 
-    - name: Сохраняем созданный отчет в репозиторий
+    # --- БЛОК РАССЫЛКИ И ОЧИСТКИ (В 05:00 по Киеву или при ручном запуске) ---
+    - name: Установка библиотек Google API
+      if: github.event_name == 'workflow_dispatch' || github.event.schedule == '00 02 * * *'
+      run: pip install google-api-python-client google-auth
+
+    - name: Отправка отчета на Google Диск
+      if: github.event_name == 'workflow_dispatch' || github.event.schedule == '00 02 * * *'
+      env:
+        GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}  # Пробрасываем секрет из настроек GitHub
+      run: python send_report.py
+
+    - name: Очистка старых отчетов в репозитории
+      if: github.event_name == 'workflow_dispatch' || github.event.schedule == '00 02 * * *'
+      run: python clean_reports.py
+
+    # --- БЛОК ФИКСАЦИИ ИЗМЕНЕНИЙ (Срабатывает всегда, чтобы сохранить новый файл или зафиксировать удаление старых) ---
+    - name: Синхронизация файлов с репозиторием GitHub
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
         git add *_report.txt
-        # Коммитим файл, только если он появился/изменился
-        git diff --cached --quiet || git commit -m "Добавлен свежий отчет [skip ci]"
+        # Коммитим только если есть реальные изменения (появился новый файл или скрипт очистки удалил старый)
+        git diff --cached --quiet || git commit -m "Автоматическое обновление архива отчетов [skip ci]"
         git push origin main
