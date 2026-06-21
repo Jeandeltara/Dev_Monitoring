@@ -37,7 +37,7 @@ jobs:
     # --- БЛОК РАССЫЛКИ И ОЧИСТКИ (В 05:00 по Киеву или при ручном запуске) ---
     - name: Установка библиотек Google API
       if: github.event_name == 'workflow_dispatch' || github.event.schedule == '00 02 * * *'
-      run: pip install google-api-python-client google-auth
+      run: pip install gspread
 
     - name: Отправка отчета на Google Диск
       if: github.event_name == 'workflow_dispatch' || github.event.schedule == '00 02 * * *'
