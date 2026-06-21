@@ -403,6 +403,6 @@ if __name__ == "__main__":
             
     print("\n" + "=" * 40)
     print(f"ФИЛЬТРАЦИЯ ЗАВЕРШЕНА. Отобрано статей: {len(TARGET_NEWS_LIST)}")
-    print(f"Полный отчет сохранен в файле: {report_path}")
+    print(f"Полный отчет сохранен в файле: {file_name}")
     print("=" * 40)
 
