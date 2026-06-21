@@ -1,19 +1,23 @@
-name: Daily News Parser
+name: Automated News Monitoring System
 
 on:
-  # Настройка автоматического запуска по расписанию (в 23:30 по Киеву каждый день)
   schedule:
-    - cron: '30 20 * * *'  # 20:30 по UTC — это 23:30 по Киеву
-  # Кнопка для ручного запуска в интерфейсе GitHub
-  workflow_dispatch:
+    - cron: '30 20 * * *'  # Каждый день в 20:30 UTC (23:30 по Киеву) — СБОР
+    - cron: '00 02 * * *'  # Каждый день в 02:00 UTC (05:00 по Киеву) — РАССЫЛКА И ОЧИСТКА
+  workflow_dispatch:       # Кнопка ручного запуска
+
+permissions:
+  contents: write          # Позволяет Гитхабу делать пуш файлов в репозиторий
 
 jobs:
-  run-script:
+  monitor-job:
     runs-on: ubuntu-latest
 
     steps:
     - name: Проверяем код репозитория
       uses: actions/checkout@v4
+      with:
+        persist-credentials: true
 
     - name: Настраиваем Python
       uses: actions/setup-python@v5
@@ -25,36 +29,27 @@ jobs:
         python -m pip install --upgrade pip
         pip install requests beautifulsoup4 python-dateutil lxml
 
-    - name: Запускаем парсер новостей
+    # --- БЛОК СБОРА НОВОСТЕЙ (Запускается только в 23:30 по Киеву или вручную) ---
+    # github.event.schedule проверяет, какой именно cron сработал
+    - name: Сбор новостей
+      if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 20 * * *'
       run: python main.py
 
-    - name: Upload Report to Google Drive via Curl
-      env:
-        GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+    # --- БЛОК РАССЫЛКИ И ОЧИСТКИ (Запускается только в 05:00 по Киеву или вручную) ---
+    - name: Рассылка отчета
+      if: github.event_name == 'workflow_dispatch' || github.event.schedule == '00 02 * * *'
+      run: python send_report.py
+
+    - name: Очистка старых отчетов
+      if: github.event_name == 'workflow_dispatch' || github.event.schedule == '00 02 * * *'
+      run: python clean_reports.py
+
+    # --- БЛОК ФИКСАЦИИ ИЗМЕНЕНИЙ (Сохраняет новые файлы и удаляет старые в самом GitHub) ---
+    - name: Сохраняем изменения в репозиторий
       run: |
-        # 1. Записываем секрет во временный файл ключа
-        echo "$GOOGLE_CREDENTIALS" > credentials.json
-        
-        # 2. Устанавливаем gspread для быстрой авторизации и заливки файла одной строкой Питона
-        pip install gspread
-        
-        # 3. Короткий скрипт «на коленке», который берет наш файл и бросает в папку Диска
-        python -c "
-        import gspread, os, glob
-        gc = gspread.service_account(filename='credentials.json')
-        file_path = glob.glob('*_report.txt')[0]
-        file_name = os.path.basename(file_path)
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        # Создаем текстовый файл прямо в нужной папке Гугла
-        try:
-            # Ищем папку и создаем там файл через gspread-клиент
-            folder_id = '1HLX_PykEsDvuOpp7gGnEoTaTYN49T050'
-            drive_file = gc.drive_client.files().create(
-                body={'name': file_name, 'parents': [folder_id]},
-                media_body=gspread.utils.MediaFileUpload(file_path, mimetype='text/plain')
-            ).execute()
-            print('Файл успешно улетел в Google Drive!')
-        except Exception as e:
-            print(f'Ошибка отправки: {e}')
-        "
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add *_report.txt
+        # Коммитим изменения, только если есть что добавлять или удалять, чтобы скрипт не падал
+        git diff --cached --quiet || git commit -m "Автоматическое обновление архива отчетов [skip ci]"
+        git push origin main
