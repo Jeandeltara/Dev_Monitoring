@@ -1,16 +1,17 @@
-name: Automated News Monitoring System
+name: Daily News Parser Only
 
 on:
+  # Автоматический запуск каждый день в 23:30 по Киеву (20:30 UTC)
   schedule:
-    - cron: '30 20 * * *'  # Каждый день в 20:30 UTC (23:30 по Киеву) — СБОР
-    - cron: '00 02 * * *'  # Каждый день в 02:00 UTC (05:00 по Киеву) — РАССЫЛКА И ОЧИСТКА
-  workflow_dispatch:       # Кнопка ручного запуска
+    - cron: '30 20 * * *'
+  # Кнопка для ручного запуска в интерфейсе GitHub
+  workflow_dispatch:
 
 permissions:
-  contents: write          # Позволяет Гитхабу делать пуш файлов в репозиторий
+  contents: write          # Разрешение Гитхабу сохранять файлы в ваш репозиторий
 
 jobs:
-  monitor-job:
+  run-parser:
     runs-on: ubuntu-latest
 
     steps:
@@ -29,27 +30,14 @@ jobs:
         python -m pip install --upgrade pip
         pip install requests beautifulsoup4 python-dateutil lxml
 
-    # --- БЛОК СБОРА НОВОСТЕЙ (Запускается только в 23:30 по Киеву или вручную) ---
-    # github.event.schedule проверяет, какой именно cron сработал
-    - name: Сбор новостей
-      if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 20 * * *'
+    - name: Запускаем парсер новостей
       run: python main.py
 
-    # --- БЛОК РАССЫЛКИ И ОЧИСТКИ (Запускается только в 05:00 по Киеву или вручную) ---
-    - name: Рассылка отчета
-      if: github.event_name == 'workflow_dispatch' || github.event.schedule == '00 02 * * *'
-      run: python send_report.py
-
-    - name: Очистка старых отчетов
-      if: github.event_name == 'workflow_dispatch' || github.event.schedule == '00 02 * * *'
-      run: python clean_reports.py
-
-    # --- БЛОК ФИКСАЦИИ ИЗМЕНЕНИЙ (Сохраняет новые файлы и удаляет старые в самом GitHub) ---
-    - name: Сохраняем изменения в репозиторий
+    - name: Сохраняем созданный отчет в репозиторий
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
         git add *_report.txt
-        # Коммитим изменения, только если есть что добавлять или удалять, чтобы скрипт не падал
-        git diff --cached --quiet || git commit -m "Автоматическое обновление архива отчетов [skip ci]"
+        # Коммитим файл, только если он появился/изменился
+        git diff --cached --quiet || git commit -m "Добавлен свежий отчет [skip ci]"
         git push origin main
