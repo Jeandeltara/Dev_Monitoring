@@ -1,57 +1,68 @@
 import os
-import json
 import glob
-import sys
-import gspread
+import json
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
-def upload_latest_report():
-    print("Запуск модуля отправки на Google Диск через gspread (текстовый режим)...")
+# Настройки целевой папки
+FOLDER_ID = '1HLX_PykEsDvuOpp7gGnEoTaTYN49T050'
+
+def get_latest_report():
+    """Ищет самый свежий файл отчета в текущей папке."""
+    files = glob.glob("*_report.txt")
+    if not files:
+        return None
+    # Сортируем по имени (так как формат YYMMDD_HHMM_report.txt, самый свежий будет последним)
+    files.sort()
+    return files[-1]
+
+def main():
+    print("Запуск модуля отправки отчета на Google Диск...")
     
-    # 1. Ищем самый свежий файл отчета
-    report_files = glob.glob("*_report.txt")
-    if not report_files:
-        print("❌ Ошибка: Файлы отчетов (*_report.txt) не найдены!")
-        sys.exit(1)
-        
-    report_files.sort()
-    latest_report = report_files[-1]
-    file_name = os.path.basename(latest_report)
-    print(f"📁 Найден свежий отчет для отправки: {file_name}")
+    # 1. Получаем токен из переменных окружения (туда его прокинет GitHub)
+    token_json_str = os.environ.get("GOOGLE_DRIVE_TOKEN")
+    if not token_json_str:
+        print("Ошибка: Переменная окружения GOOGLE_DRIVE_TOKEN не найдена!")
+        return
 
-    # 2. Получаем секретный JSON-ключ
-    secret_credentials = os.environ.get("GOOGLE_CREDENTIALS")
-    if not secret_credentials:
-        print("❌ Ошибка: Переменная окружения GOOGLE_CREDENTIALS не найдена!")
-        sys.exit(1)
+    # 2. Находим файл для отправки
+    report_file = get_latest_report()
+    if not report_file:
+        print("Ошибка: В репозитории не найдено ни одного файла *_report.txt для отправки!")
+        return
+    print(f"Найден файл для отправки: {report_file}")
 
     try:
-        # Превращаем строку с секретом обратно в JSON-словарь
-        creds_dict = json.loads(secret_credentials)
+        # 3. Авторизуемся в Google API через сохраненные Credentials пользователя
+        token_data = json.loads(token_json_str)
+        creds = Credentials.from_authorized_user_info(token_data)
         
-        # Авторизуемся в Google через gspread
-        gc = gspread.service_account_from_dict(creds_dict)
-        
-        # 3. Целевая папка
-        FOLDER_ID = "1HLX_PykEsDvuOpp7gGnEoTaTYN49T050"  # ID вашей папки
-        
-        print("🚀 Чтение файла отчета...")
-        with open(latest_report, "r", encoding="utf-8") as f:
-            file_content = f.read()
+        # Строим клиент для работы с Drive API v3
+        service = build('drive', 'v3', credentials=creds)
 
-        print("🚀 Создание нового файла на Google Диске...")
-        # Используем официальный метод gspread для создания пустого текстового файла
-        new_file = gc.create(file_name, folder_id=FOLDER_ID)
+        # 4. Готовим метаданные файла
+        file_metadata = {
+            'name': report_file,
+            'parents': [FOLDER_ID]
+        }
         
-        print("🚀 Запись содержимого отчета...")
-        # Так как это обычный текстовый файл, мы просто заливаем туда всю строку целиком
-        # Это абсолютно легальный способ, который не использует квоту самого сервис-аккаунта
-        gc.import_csv(new_file.id, file_content.encode('utf-8'))
+        # Готовим само тело файла для загрузки
+        media = MediaFileUpload(report_file, mimetype='text/plain', resumable=False)
+
+        print(f"Загрузка файла в папку {FOLDER_ID}...")
         
-        print(f"✅ Успех! Файл '{file_name}' успешно загружен на Google Диск.")
+        # 5. Выполняем загрузку от имени пользователя
+        uploaded_file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id'
+        ).execute()
+        
+        print(f"УСПЕХ! Файл успешно загружен. Google Drive ID: {uploaded_file.get('id')}")
 
     except Exception as e:
-        print(f"❌ Произошла ошибка во время отправки через gspread: {e}")
-        sys.exit(1)
+        print(f"Критическая ошибка при работе с Google Drive API: {e}")
 
 if __name__ == "__main__":
-    upload_latest_report()
+    main()
