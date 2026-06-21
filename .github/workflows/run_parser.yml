@@ -1,0 +1,32 @@
+name: Daily News Parser
+
+on:
+  # Настройка автоматического запуска по расписанию (в 23:30 по Киеву каждый день)
+  schedule:
+    - cron: '30 20 * * *'  # 20:30 по UTC — это 23:30 по Киеву
+  # Кнопка для ручного запуска в интерфейсе GitHub
+  workflow_dispatch:
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Проверяем код репозитория
+      uses: actions/checkout@v4
+
+    - name: Настраиваем Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Устанавливаем библиотеки
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests beautifulsoup4 python-dateutil google-auth google-auth-oauthlib google-api-python-client
+
+    - name: Запускаем парсер новостей
+      env:
+        # Передаем наш секретный JSON-ключ внутрь Python
+        GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+      run: python main.py
