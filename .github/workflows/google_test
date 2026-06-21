@@ -1,0 +1,37 @@
+name: Test Google Drive OAuth Upload
+
+# Запуск только вручную по кнопке из вкладки Actions
+on:
+  workflow_dispatch:
+
+jobs:
+  test_upload:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-state: '3.10'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        pip install google-auth-oauthlib google-api-python-client
+
+    - name: Create fake report file for testing
+      run: |
+        # Создаем тестовый файл, имитирующий работу парсера
+        echo "Это тестовый отчет для проверки OAuth 2.0 от $(date)" > 260621_1200_report.txt
+        echo "Проверка связи с Google Drive папки 1HLX_PykEsDvuOpp7gGnEoTaTYN49T050" >> 260621_1200_report.txt
+        echo "Файл успешно создан локально в раннере."
+
+    - name: Run send_report.py
+      env:
+        # Прокидываем наш секрет из настроек репозитория в скрипт
+        GOOGLE_DRIVE_TOKEN: ${{ secrets.GOOGLE_DRIVE_TOKEN }}
+      run: |
+        python send_report.py
