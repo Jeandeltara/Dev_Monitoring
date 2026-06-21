@@ -7,68 +7,11 @@ from datetime import datetime, timedelta
 from dateutil import parser
 
 from google.oauth2 import service_account
-from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 from zoneinfo import ZoneInfo
-
-def upload_to_google_drive(file_name, folder_id):
-    print(f"Начинаем отправку файла {file_name} на Google Диск...")
-    try:
-        creds_json = os.environ.get("GOOGLE_CREDENTIALS")
-        if not creds_json:
-            print("Ошибка: Секрет GOOGLE_CREDENTIALS не найден в настройках GitHub!")
-            return
-
-        service_account_info = json.loads(creds_json)
-        credentials = Credentials.from_service_account_info(
-            service_account_info, 
-            scopes=["https://www.googleapis.com/auth/drive"]
-        )
-        service = build("drive", "v3", credentials=credentials)
-
-        file_metadata = {
-            "name": file_name,
-            "parents": [folder_id]
-        }
-        media = MediaFileUpload(file_name, mimetype="text/plain", resumable=True)
-
-        # Запрашиваем ID и прямую ссылку на веб-интерфейс файла
-        uploaded_file = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields="id, webViewLink",
-            supportsAllDrives=True
-        ).execute()
-
-        file_id = uploaded_file.get("id")
-        file_link = uploaded_file.get("webViewLink")
-        print(f"Файл создан на стороне Google. ID: {file_id}")
-
-        # Укажите ваш точный личный Gmail
-        user_email = "ivannosalevych@gmail.com" 
-        
-        permission_metadata = {
-            "type": "user",
-            "role": "writer",
-            "emailAddress": user_email
-        }
-        
-        print(f"Пробуем открыть доступ для {user_email}...")
-        service.permissions().create(
-            fileId=file_id,
-            body=permission_metadata,
-            supportsAllDrives=True
-        ).execute()
-        print("Доступ успешно предоставлен!")
-        
-        # Выводим жирную ссылку в логи, которую можно просто скопировать
-        print(f"\n👉 ССЫЛКА НА ФАЙЛ: {file_link}\n")
-
-    except Exception as e:
-        print(f"Ошибка при работе с Google Диском: {e}")
 
 def parse_rss_feed(url, target_date):
     """Сканирует одну стандартную RSS-ленту и возвращает ссылки за целевую дату."""
@@ -421,7 +364,17 @@ if __name__ == "__main__":
     print(f"Локальный файл {file_name} успешно создан.")
     
     # 9. Отправка готового файла на Google Диск
-    upload_to_google_drive(file_name, GOOGLE_FOLDER_ID)
+    #upload_to_google_drive(file_name, GOOGLE_FOLDER_ID)
+
+file_name = f"{date_str}_{time_str}_report.txt"
+with open(file_name, "w", encoding="utf-8") as f:
+    f.write(report_text)
+
+print(f"Локальный файл {file_name} успешно создан.")
+print("ФИЛЬТРАЦИЯ ЗАВЕРШЕНА. Отобрано статей: ...")
+
+print(f"Локальный файл {file_name} успешно создан.")
+print("ФИЛЬТРАЦИЯ ЗАВЕРШЕНА. Отобрано статей: ...")
             
     print("\n" + "=" * 40)
     print(f"ФИЛЬТРАЦИЯ ЗАВЕРШЕНА. Отобрано статей: {len(TARGET_NEWS_LIST)}")
