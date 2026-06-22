@@ -185,8 +185,8 @@ if __name__ == "__main__":
     all_links.extend(parse_suspilne_site(today))
     all_links = list(set(all_links))
     
-    #keyword = r"23.{0,4} інженерно"
-    keyword = "рівне"
+    keyword = r"23.{0,4} інженерно"
+    #keyword = "рівне"
     TARGET_NEWS_LIST = filter_pages_by_keyword(all_links, keyword)
     
     final_text = f"ОТЧЕТ: Найденные ссылки за {today} по ключевому слову '{keyword}'\n"
