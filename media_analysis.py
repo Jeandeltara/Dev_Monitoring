@@ -3,12 +3,12 @@ import glob
 import re
 import datetime
 import requests
-import google.generativeai as genai
 from bs4 import BeautifulSoup
+from google import genai
 
 # --- Настройка API ---
-# Ключ подтягивается из GitHub Secrets (GOOGLE_API_KEY)
-genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
+# Используем новую клиентскую библиотеку google-genai
+client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
 
 # --- Parsers library ---
 def clean_content(element):
@@ -51,8 +51,11 @@ def get_parser_by_url(url):
 
 # --- Main logic ---
 def send_to_gemini(prompt_text):
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    response = model.generate_content(prompt_text)
+    # Используем самую актуальную модель
+    response = client.models.generate_content(
+        model='gemini-2.0-flash',
+        contents=prompt_text,
+    )
     return response.text
 
 def get_latest_report():
@@ -67,6 +70,7 @@ def extract_urls(file_path):
 def process_and_create_prompt():
     report_file = get_latest_report()
     if not report_file:
+        print("No report file found.")
         return
 
     urls = extract_urls(report_file)
@@ -82,12 +86,15 @@ def process_and_create_prompt():
                 title = soup.title.string.strip() if soup.title else "No Title"
                 articles_data.append(f"### Заголовок: {title}\nИсточник: {url}\nТекст: {text}\n---")
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Error processing {url}: {e}")
 
-    with open('prompt.txt', 'r', encoding='utf-8') as f:
-        base_prompt = f.read()
+    if os.path.exists('prompt.txt'):
+        with open('prompt.txt', 'r', encoding='utf-8') as f:
+            base_prompt = f.read()
+    else:
+        base_prompt = "Проанализируй следующие статьи:"
 
-    # Замените 'redneck' на ваше ключевое слово перед отправкой
+    # Замена ключевого слова (если оно есть в prompt.txt)
     full_prompt = (base_prompt + "\n\n" + "\n".join(articles_data)).replace('redneck', 'ВАШЕ_КЛЮЧЕВОЕ_СЛОВО')
 
     with open('prompt_w.txt', 'w', encoding='utf-8') as f:
