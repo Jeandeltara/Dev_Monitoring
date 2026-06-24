@@ -5,7 +5,7 @@ from dateutil import parser
 import re
 
 # --- CONFIGURATION ---
-KEYWORDS_LIST = [r"23.{0,4} інженерно"]
+KEYWORDS_LIST = [r"23.{0,4} інженерно", "дубно"]
 
 def get_soup(url):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
