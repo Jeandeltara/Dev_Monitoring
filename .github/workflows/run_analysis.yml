@@ -1,14 +1,20 @@
 name: run analysis workflow
 
 on:
-  schedule:
-    # Запуск щодня о 09:00 за UTC
-    - cron: '0 9 * * *'
-  # Можливість запустити вручну з вкладки Actions
   workflow_dispatch:
+  workflow_run:
+    workflows: ["run parser workflow"] # Имя первого процесса
+    types:
+      - completed
+
+permissions:
+  contents: write
+  actions: write # Необходимо для вызова следующего workflow
 
 jobs:
   analyze:
+    # Запуск только если первый процесс завершился успешно
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     
     steps:
@@ -23,7 +29,6 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Устанавливаем библиотеку для работы с Groq
           python -m pip install requests beautifulsoup4 groq
 
       - name: Run media analysis script
@@ -35,7 +40,13 @@ jobs:
         run: |
           git config --global user.name 'GitHub Action'
           git config --global user.email 'action@github.com'
-          # Додаємо результати аналізу та промпт, якщо вони з'явилися
           git add *_analysis_report.txt || echo "No files to add"
           git commit -m "Оновлення аналітичного звіту [skip ci]" || echo "No changes to commit"
           git push
+
+      # ВЫЗОВ ТРЕТЬЕГО ПРОЦЕССА
+      - name: Виклик відправки на Google Drive
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run run_google.yml
