@@ -1,166 +1,225 @@
+import os
+import re
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from dateutil import parser
-import re
 
-# --- CONFIGURATION ---
-KEYWORDS_LIST = [r"23.{0,4} інженерно", "дубно"]
+# --- КОНФІГУРАЦІЯ ---
+KEYWORDS_LIST = [r"23.{0,4} інженерно"]
 
-def get_soup(url):
+def parse_rss_feed(url, start_time, end_time):
+    """
+    Scans RSS feeds of standard news resources and returns a list of article URLs 
+    published within the specified time interval.
+    """
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    found_urls = []
+    print(f"  --> Scanning RSS: {url}...")
     try:
         response = requests.get(url, headers=headers, timeout=10)
-        response.encoding = response.apparent_encoding
-        return BeautifulSoup(response.text, "html.parser")
-    except Exception as e:
-        print(f"Error fetching {url}: {e}")
-        return None
-
-# --- PARSERS ---
-
-def parse_rivnepost(start_time, end_time):
-    urls = []
-    page = 1
-    while True:
-        url = "https://rivnepost.rv.ua/category/news" if page == 1 else f"https://rivnepost.rv.ua/category/news/page/{page}/"
-        soup = get_soup(url)
-        if not soup: break
-        articles = soup.select('div.list-item')
-        if not articles: break
-        stop = False
-        for art in articles:
-            time_tag = art.find("time")
-            if time_tag and time_tag.get("datetime"):
-                dt = parser.parse(time_tag["datetime"]).replace(tzinfo=None)
-                if dt < start_time: stop = True; break
-                if start_time <= dt < end_time:
-                    link = art.find("a", href=True)
-                    if link: urls.append(link["href"])
-        if stop: break
-        page += 1
-    return urls
-
-def parse_ogo(start_time, end_time):
-    urls = []
-    page = 1
-    while True:
-        url = "https://ogo.ua/rubrics/view/region" if page == 1 else f"https://ogo.ua/rubrics/view/region/page/{page}/"
-        soup = get_soup(url)
-        if not soup: break
-        articles = soup.find_all("article")
-        if not articles: break
-        stop = False
-        for art in articles:
-            time_tag = art.find("time")
-            if time_tag and time_tag.get("datetime"):
-                dt = parser.parse(time_tag["datetime"]).replace(tzinfo=None)
-                if dt < start_time: stop = True; break
-                if start_time <= dt < end_time:
-                    link = art.find("a", href=True)
-                    if link: urls.append(link["href"])
-        if stop: break
-        page += 1
-    return urls
-
-def parse_7dniv(start_time, end_time):
-    urls = []
-    page = 1
-    while True:
-        url = "https://7dniv.rv.ua/news/" if page == 1 else f"https://7dniv.rv.ua/news/page/{page}/"
-        soup = get_soup(url)
-        if not soup: break
-        articles = soup.select('div.post-item')
-        if not articles: break
-        stop = False
-        for art in articles:
-            time_tag = art.find("time")
-            if time_tag and time_tag.get("datetime"):
-                dt = parser.parse(time_tag["datetime"]).replace(tzinfo=None)
-                if dt < start_time: stop = True; break
-                if start_time <= dt < end_time:
-                    link = art.find("a", href=True)
-                    if link: urls.append(link["href"])
-        if stop: break
-        page += 1
-    return urls
-
-def parse_rivne1(start_time, end_time):
-    urls = []
-    offset = 0
-    while True:
-        url = f"https://rivne1.tv/allnews?offset={offset}"
-        soup = get_soup(url)
-        if not soup: break
-        articles = soup.select('ul.list-st-3 li')
-        if not articles: break
+        if response.status_code != 200:
+            print(f"      [Помилка] HTTP Error {response.status_code}")
+            return found_urls
+        soup = BeautifulSoup(response.text, "xml")
+        items = soup.find_all("item")
         
-        # Rivne1 особенность: дата в родительском блоке, тут упрощенная логика
-        # Если нужно точное сравнение даты, берем ее из страницы новости
-        for art in articles:
-            link = art.find("a", href=True)
-            if link: urls.append(link["href"])
-        if len(articles) < 10: break 
-        offset += 40
-    return urls
-
-def parse_itvmg(start_time, end_time):
-    urls = []
-    page = 0
-    while True:
-        url = "https://itvmg.com/novini" if page == 0 else f"https://itvmg.com/novini/{page*21}"
-        soup = get_soup(url)
-        if not soup: break
-        items = soup.select('.list-style > div')
-        if not items: break
+        count_before_time = 0
         for item in items:
-            link = item.find("a", href=True)
-            if link: urls.append(link["href"])
-        page += 1
-        if page > 10: break
-    return urls
+            pub_date_tag = item.find("pubDate")
+            link_tag = item.find("link")
+            if not pub_date_tag or not link_tag:
+                continue
+            try:
+                news_datetime = parser.parse(pub_date_tag.text).replace(tzinfo=None)
+            except Exception:
+                continue
+            
+            if start_time <= news_datetime < end_time:
+                found_urls.append(link_tag.text.strip())
+                count_before_time += 1
+        
+        if count_before_time > 0:
+            print(f"      [Успішно] Знайдено {count_before_time} новин у заданому інтервалі.")
+    except requests.RequestException as e:
+        print(f"      [Помилка] Помилка запиту: {e}")
+    return found_urls
 
-def parse_teza(start_time, end_time):
-    urls = []
-    url = "https://teza.tv/category/news/"
-    soup = get_soup(url)
-    if soup:
-        articles = soup.select('article')
-        for art in articles:
-            link = art.find("a", href=True)
-            if link: urls.append(link["href"])
-    return urls
-
-# --- MAIN ---
-
-def main():
-    end_time = datetime.now().replace(hour=14, minute=0, second=0, microsecond=0)
-    start_time = end_time - timedelta(days=1)
+def parse_rayon_site(base_url, start_time, end_time):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    target_url = base_url.rstrip('/') + "/news"
+    collected_links = []
     
-    print("="*70)
-    print("STARTING MEDIA MONITORING")
-    print(f"Interval: {start_time} to {end_time}")
-    print("="*70)
+    try:
+        print(f"  --> Scanning general Rayon feed: {target_url}...")
+        response = requests.get(target_url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return collected_links
+            
+        response.encoding = response.apparent_encoding
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        all_anchors = soup.find_all("a", href=True)
+        for anchor in all_anchors:
+            href = anchor["href"]
+            if "/news/" in href and not href.endswith("/news") and not href.endswith("/news/"):
+                full_url = base_url.rstrip('/') + href if href.startswith("/") else href
+                if full_url not in collected_links:
+                    collected_links.append(full_url)
+                    
+        print(f"      [Успішно] Зібрано {len(collected_links)} потенційних посилань для перевірки.")
+    except Exception as e:
+        print(f"      [Помилка] Помилка при зборі посилань з {base_url}: {e}")
+        
+    return collected_links
 
-    # Collect all links
-    all_links = []
-    parsers = [parse_rivnepost, parse_ogo, parse_7dniv, parse_rivne1, parse_itvmg, parse_teza]
+def parse_charivne_site(start_time, end_time):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    base_url = "https://charivne.info"
+    collected_links = []
     
-    for parser_func in parsers:
+    months_ua = {
+        "січня": 1, "лютого": 2, "березня": 3, "квітня": 4, "травня": 5, "червня": 6,
+        "липня": 7, "серпня": 8, "вересня": 9, "жовтня": 10, "листопада": 11, "грудня": 12
+    }
+    
+    yesterday_str = start_time.strftime("%d").lstrip('0')
+    yesterday_month = start_time.month
+    
+    print(f"  --> Scanning charivne.info (RSS replacement)...")
+    
+    for page in [1, 2]:
+        url = f"{base_url}/allnews?page={page}"
         try:
-            all_links.extend(parser_func(start_time, end_time))
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code != 200: break
+                
+            response.encoding = response.apparent_encoding
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            news_items = soup.find_all("div", class_="allnews-box") or soup.find_all("div", class_="the-news-container")
+            if not news_items:
+                news_items = [a.find_parent("div") for a in soup.find_all("a", href=re.compile(r"/news/\d+")) if a.find_parent("div")]
+            
+            has_yesterday_date = False
+            page_links_count = 0
+            
+            for item in news_items:
+                link_tag = item.find("a", href=True)
+                if not link_tag: continue
+                    
+                full_url = link_tag["href"] if link_tag["href"].startswith("http") else base_url + link_tag["href"]
+                item_text = item.get_text().lower()
+                
+                for m_name, m_num in months_ua.items():
+                    if m_num == yesterday_month and m_name in item_text:
+                        if yesterday_str in item_text:
+                            has_yesterday_date = True
+                            break
+                
+                if full_url not in collected_links:
+                    collected_links.append(full_url)
+                    page_links_count += 1
+            
+            print(f"      Сторінка {page}: Зібрано {page_links_count} посилань.")
+            if page == 1 and has_yesterday_date:
+                print("      [Інфо] Дата вчорашнього дня знайдена. Друга сторінка не потрібна.")
+                break
         except Exception as e:
-            print(f"Error in {parser_func.__name__}: {e}")
+            print(f"      [Помилка] Помилка на сторінці {page} (charivne.info): {e}")
+            break
 
-    unique_links = list(set(all_links))
-    print(f"Collected {len(unique_links)} unique links.")
+    print(f"      [Успішно] Всього відправлено на фільтрацію: {len(collected_links)} посилань.")
+    return collected_links
 
-    # Здесь вы вызываете свою функцию filter_pages_by_keyword(unique_links, ...)
+def parse_vse_rv_site(start_time, end_time):
+    base_url = "https://vse.rv.ua"
+    target_url = f"{base_url}/strichka.html"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    collected_links = []
     
-    print("\n" + "="*70)
-    print("ЗВІТ МОНІТОРИНГУ ПРЕСИ")
-    print(f"Період: {start_time} — {end_time}")
-    print("="*70)
+    print(f"  --> Scanning VSE feed: {target_url} (RSS replacement)...")
+    try:
+        response = requests.get(target_url, headers=headers, timeout=10)
+        if response.status_code != 200: return collected_links
+            
+        response.encoding = response.apparent_encoding
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        for anchor in soup.find_all("a", href=True):
+            if anchor["href"].startswith("/article/"):
+                full_url = base_url + anchor["href"]
+                if full_url not in collected_links:
+                    collected_links.append(full_url)
+                    
+        print(f"      [Успішно] Зібрано {len(collected_links)} потенційних посилань.")
+    except Exception as e:
+        print(f"      [Помилка] Помилка при зборі з {target_url}: {e}")
+        
+    return collected_links
 
-if __name__ == "__main__":
-    main()
+def parse_radiotrek_site(start_time, end_time):
+    base_url = "https://radiotrek.rv.ua"
+    url = f"{base_url}/news/"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    found_urls = []
+    
+    str_day_today = str(end_time.day)
+    print(f"  --> Scanning Radiotrek ({url})...")
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200: return found_urls
+        response.encoding = response.apparent_encoding
+        soup = BeautifulSoup(response.text, "html.parser")
+        all_text_nodes = list(soup.find_all(string=True))
+        
+        start_index, end_index = None, None
+        for index, node in enumerate(all_text_nodes):
+            clean_text = node.strip()
+            if start_index is None and clean_text.startswith(str_day_today) and len(clean_text) <= 15 and clean_text.isupper():
+                start_index = index
+                continue
+            day_before = str((start_time - timedelta(days=1)).day)
+            if start_index is not None and end_index is None and clean_text.startswith(day_before) and len(clean_text) <= 15 and clean_text.isupper():
+                end_index = index
+                break
+        
+        if start_index is None:
+            print("      [Попередження] Не вдалося надійно визначити межі блоків на Radiotrek.")
+            return found_urls
+            
+        target_nodes = all_text_nodes[start_index:] if end_index is None else all_text_nodes[start_index:end_index]
+        for node in target_nodes:
+            parent = node.find_parent("a")
+            if parent:
+                href = parent.get("href")
+                if href and re.search(r"/news/.*_\d+\.html", href):
+                    found_urls.append(href if href.startswith("http") else base_url.rstrip("/") + href)
+    except requests.RequestException as e:
+        print(f"      [Помилка] {e}")
+        
+    print(f"      [Успішно] Зібрано {len(set(found_urls))} потенційних посилань.")
+    return list(set(found_urls))
+
+def parse_suspilne_site(start_time, end_time):
+    base_url = "https://suspilne.media"
+    url_regional = f"{base_url}/rivne/"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    found_urls = []
+    page = 1
+    print(f"  --> Scanning Suspilne ({url_regional})...")
+    
+    while True:
+        url = f"{url_regional}?p={page}"
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code != 200: break
+            response.encoding = response.apparent_encoding
+            soup = BeautifulSoup(response.text, "html.parser")
+            articles = soup.find_all("article")
+            if not articles: break
+            
+            stop_pagination = False
+            for article in articles:
+                time_tag
