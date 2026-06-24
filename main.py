@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from dateutil import parser
 
 # --- КОНФІГУРАЦІЯ ---
-KEYWORDS_LIST = [r"23.{0,4} інженерно"]
+KEYWORDS_LIST = [r"23.{0,4} інженерно", "дубно"]
 
 def parse_rss_feed(url, start_time, end_time):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
