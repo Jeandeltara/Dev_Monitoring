@@ -80,7 +80,7 @@ def process_and_create_report():
     print(f"Found {len(urls)} links to process.")
     
     date_str = datetime.datetime.now().strftime("%y%m%d")
-    output_filename = f"{date_str}_media_analysis.txt"
+    output_filename = f"{date_str}_analysis_report.txt"
     
     # Load analysis instructions
     base_prompt = "Analyze this article, specifically looking for mentions of 'Дубно' or local context:"
