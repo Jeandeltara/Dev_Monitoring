@@ -1,4 +1,4 @@
-name: Run parser
+name: Run parser workflow
 
 on:
   schedule:
@@ -40,4 +40,4 @@ jobs:
         git add *_report.txt
         
         # Commiting and ushing report files
-        git diff --cached --quiet || (git commit -m "Автоматическое обновление архива отчетов [skip ci]" && git push origin main)
+        git diff --cached --quiet || (git commit -m "Автоматичне оновлення архіву звітів [skip ci]" && git push origin main)
