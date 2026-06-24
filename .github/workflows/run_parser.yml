@@ -1,12 +1,12 @@
-name: Run parser workflow
+name: run parser workflow
 
 on:
   schedule:
-    - cron: '10 11 * * *'  # Каждый день в 11:10 UTC (14:10 по Киеву)
-  workflow_dispatch:       # Кнопка ручного запуска для тестов
+    - cron: '10 11 * * *'  # Every day by 11:10 UTC (14:10 by Kyiv)
+  workflow_dispatch:       
 
 permissions:
-  contents: write          # Права на запись файлов в репозиторий
+  contents: write          
 
 jobs:
   monitor-job:
