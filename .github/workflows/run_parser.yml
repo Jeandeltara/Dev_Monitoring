@@ -2,7 +2,7 @@ name: run parser workflow
 
 on:
   schedule:
-    - cron: '10 11 * * *'  # 14:10 по Киеву
+    - cron: '17 17 * * *'  # 14:10 по Киеву
   workflow_dispatch:
     inputs:
       is_scheduled:
