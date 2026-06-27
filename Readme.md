@@ -1,4 +1,4 @@
-# Automated Regional News Monitoring System
+# Automated Regional Media Monitoring System
 
 ## English
 This project is an automated news monitoring system designed for communication units to track regional media coverage efficiently. Traditional search engine queries often yield high rates of false positives, necessitating manual review of hundreds of links. This tool automates the process by specifically scanning a curated list of regional news sites in Rivne and Dubno, filtering for relevant unit mentions.
