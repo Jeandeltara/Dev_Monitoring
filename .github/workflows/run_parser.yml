@@ -2,7 +2,7 @@ name: run parser workflow
 
 on:
   schedule:
-    - cron: '11 11 * * *'  # 14:10 по Киеву
+    - cron: '11 11 * * *'  # 14:11 по Киеву
   workflow_dispatch:
     inputs:
       is_scheduled:
@@ -12,7 +12,7 @@ on:
 
 permissions:
   contents: write
-  actions: write # Нужно для вызова других workflow через API
+  actions: write # для вызова других workflow через API
 
 jobs:
   monitor-job:
